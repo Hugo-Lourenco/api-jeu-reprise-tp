@@ -1,6 +1,7 @@
 """Routes système — séance 7, partie 3."""
 
 from fastapi import APIRouter
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 
 from app.config import configuration
@@ -9,6 +10,11 @@ from app.exceptions import ErreurMetier
 from app.journalisation import logger
 
 routeur = APIRouter(tags=["Système"])
+
+
+@routeur.get("/genre", include_in_schema=False)
+def raccourci_genres():
+    return RedirectResponse(url="/api/v1/jeux/genres", status_code=307)
 
 
 @routeur.get("/", summary="Racine")

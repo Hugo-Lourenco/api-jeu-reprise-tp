@@ -69,6 +69,16 @@ def statistiques(session: SessionDep):
 
 
 @routeur.get(
+    "/genres",
+    response_model=list[str],
+    summary="Lister les genres utilisés",
+    description="Renvoie les genres portés par au moins un jeu, triés par ordre alphabétique.",
+)
+def lister_genres(session: SessionDep):
+    return service.genres(session)
+
+
+@routeur.get(
     "/{jeu_id}",
     response_model=JeuSortie,
     summary="Lire un jeu",

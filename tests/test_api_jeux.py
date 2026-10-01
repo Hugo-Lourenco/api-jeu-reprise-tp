@@ -37,6 +37,31 @@ def test_lister_renvoie_une_page(client):
     assert corps["pages_totales"] == 0
 
 
+def test_genres_sans_jeux(client):
+    reponse = client.get(f"{BASE}/jeux/genres")
+
+    assert reponse.status_code == 200
+    assert reponse.json() == []
+
+
+def test_raccourci_genres_redirige_vers_api(client):
+    reponse = client.get("/genre", follow_redirects=False)
+
+    assert reponse.status_code == 307
+    assert reponse.headers["location"] == f"{BASE}/jeux/genres"
+
+
+def test_genres_tries_et_sans_doublons(client, entetes):
+    creer_jeu(client, entetes, titre="Celeste", genre="Plateforme")
+    creer_jeu(client, entetes, titre="Hades", genre="RPG")
+    creer_jeu(client, entetes, titre="Hollow Knight", genre="Plateforme")
+
+    reponse = client.get(f"{BASE}/jeux/genres")
+
+    assert reponse.status_code == 200
+    assert reponse.json() == ["Plateforme", "RPG"]
+
+
 def test_lire_jeu_absent(client):
     reponse = client.get(f"{BASE}/jeux/99999")
 
