@@ -1,127 +1,131 @@
 # API Catalogue de jeux
 
-API REST de gestion d'un catalogue de jeux vidéo, construite avec FastAPI et PostgreSQL.
+API REST en FastAPI pour gérer un catalogue de jeux vidéo et leurs éditeurs, avec des comptes utilisateurs et une authentification par jeton JWT. Elle sert de backend au front du catalogue.
 
 ## Prérequis
 
-- Docker Desktop avec Docker Compose (pour le démarrage recommandé).
-- Python 3.12 ou supérieur si vous souhaitez lancer les commandes Python ou l'API hors de Docker.
-- PostgreSQL 16 si vous lancez l'API hors de Docker.
+- Python 3.12 (la version de la CI ; fonctionne aussi en 3.14)
+- Git
 
 ## Démarrage rapide
 
-À la racine du dépôt, copiez le fichier de configuration d'exemple :
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Sur macOS ou Linux :
+Le démarrage le plus court utilise une base SQLite locale : aucune base à installer.
 
 ```bash
-cp .env.example .env
+git clone https://github.com/Hugo-Lourenco/api-jeu-reprise-tp.git
+cd api-jeu-reprise-tp
+python -m venv .venv
+source .venv/bin/activate          # Windows : .venv\Scripts\activate
+pip install -r requirements-dev.txt
+cp .env.example .env               # Windows : copy .env.example .env
 ```
 
-Dans `.env`, remplacez `CLE_SECRETE` par une valeur générée, par exemple avec :
+Ouvrez `.env` et modifiez ces trois lignes :
+
+```ini
+DATABASE_URL=sqlite:///./jeux.db
+CLE_SECRETE=remplacez-moi
+ORIGINES_AUTORISEES=["http://localhost:5173"]
+```
+
+- `CLE_SECRETE` : générez votre propre valeur avec `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+- `ORIGINES_AUTORISEES` : gardez les crochets et les guillemets. Sans eux, l'API refuse de démarrer avec `SettingsError: error parsing value for field "origines_autorisees"`.
+
+Remplissez la base avec le catalogue de démonstration, puis lancez l'API :
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+python scripts/peupler.py
+fastapi dev app/main.py
 ```
 
-Ne réutilisez pas une clé de développement en production et ne partagez jamais votre fichier `.env`.
-
-Construisez et démarrez l'API ainsi que PostgreSQL :
-
-```bash
-docker compose up --build
-```
-
-Quand les conteneurs démarrent, ouvrez <http://localhost:8000/docs>. La documentation interactive de l'API doit s'afficher. Pour arrêter les conteneurs, utilisez `Ctrl+C`, puis :
-
-```bash
-docker compose down
-```
+`peupler.py` affiche `Jeux créés : 8`. Le serveur affiche ensuite `Uvicorn running on http://127.0.0.1:8000`. Ouvrez http://127.0.0.1:8000/docs : la liste des routes s'affiche.
 
 ## Configuration
 
-Les noms ci-dessous sont ceux à utiliser dans `.env`. Les deux premières variables sont obligatoires lorsque l'API est lancée directement sur votre machine. Avec Docker Compose, l'URL de la base de données est fournie au conteneur par `docker-compose.yml`.
+Les variables sont lues dans `.env` par `app/config.py`. Sans une variable obligatoire, l'API refuse de démarrer avec un message explicite.
 
 | Variable | Rôle | Obligatoire | Valeur par défaut |
-|---|---|---:|---|
-| `DATABASE_URL` | URL de connexion SQLAlchemy à PostgreSQL. | Oui, hors Docker Compose | Aucune |
-| `CLE_SECRETE` | Clé utilisée pour signer les jetons d'authentification. À garder secrète. | Oui | Aucune |
-| `ALGORITHME_JETON` | Algorithme de signature des jetons. | Non | `HS256` |
-| `DUREE_JETON_MINUTES` | Durée de validité d'un jeton, en minutes. | Non | `30` |
-| `ORIGINES_AUTORISEES` | Origines autorisées par CORS ; plusieurs origines peuvent être séparées par des virgules. | Non | `http://localhost:5173` |
-| `ENVIRONNEMENT` | Nom de l'environnement d'exécution. | Non | `developpement` |
-| `NIVEAU_JOURNAL` | Niveau des journaux de l'application. | Non | `INFO` |
-| `ECHO_SQL` | Active l'affichage des requêtes SQL. | Non | `false` |
-| `MAX_TENTATIVES_CONNEXION` | Nombre maximal de tentatives de connexion dans la fenêtre définie. | Non | `5` |
-| `FENETRE_TENTATIVES_MINUTES` | Durée de la fenêtre de limitation, en minutes. | Non | `15` |
-
-Pour un lancement hors de Docker, configurez `DATABASE_URL` avec l'URL de votre base PostgreSQL, puis démarrez l'application avec `fastapi dev app/main.py`.
+|---|---|---|---|
+| `DATABASE_URL` | Adresse de la base : `sqlite:///./jeux.db`, ou `postgresql+psycopg://utilisateur:motdepasse@hote:5432/base` | Oui | aucune |
+| `CLE_SECRETE` | Clé de signature des jetons JWT. Ne jamais la versionner | Oui | aucune |
+| `ALGORITHME_JETON` | Algorithme de signature des jetons | Non | `HS256` |
+| `DUREE_JETON_MINUTES` | Durée de validité d'un jeton, en minutes | Non | `30` |
+| `ORIGINES_AUTORISEES` | Origines autorisées par CORS, en liste JSON | Non | `["http://localhost:5173"]` |
+| `ENVIRONNEMENT` | `developpement`, `test` ou `production` | Non | `developpement` |
+| `NIVEAU_JOURNAL` | Niveau des journaux : `DEBUG`, `INFO`, `WARNING`… | Non | `INFO` |
+| `ECHO_SQL` | Affiche les requêtes SQL dans le terminal | Non | `false` |
+| `MAX_TENTATIVES_CONNEXION` | Échecs de connexion tolérés avant blocage | Non | `5` |
+| `FENETRE_TENTATIVES_MINUTES` | Fenêtre de comptage des échecs de connexion, en minutes | Non | `15` |
 
 ## Utilisation
 
-L'API est préfixée par `/api/v1`. Une fois le serveur démarré, la documentation interactive est disponible sur <http://localhost:8000/docs>.
+La documentation interactive de toutes les routes est générée par FastAPI : http://127.0.0.1:8000/docs. Les routes métier sont préfixées par `/api/v1`.
 
-Lister les jeux :
+Lister les jeux de genre RPG, triés par note :
 
-```powershell
-Invoke-RestMethod http://localhost:8000/api/v1/jeux
+```bash
+curl "http://127.0.0.1:8000/api/v1/jeux?genre=RPG&tri=note"
 ```
 
-Lire les statistiques du catalogue :
+Résultat attendu : une page JSON avec `elements` (Undertale et Disco Elysium) et `"total":2`.
 
-```powershell
-Invoke-RestMethod http://localhost:8000/api/v1/jeux/statistiques
+Obtenir les statistiques du catalogue :
+
+```bash
+curl http://127.0.0.1:8000/api/v1/jeux/statistiques
 ```
 
-Vérifier que l'API et sa base de données répondent :
+Résultat attendu : `{"nombre":8,"moyenne":8.5,"meilleure_note":10,"par_genre":{...}}`.
 
-```powershell
-Invoke-RestMethod http://localhost:8000/api/v1/sante
+Se connecter avec le compte administrateur de démonstration créé par `scripts/peupler.py` :
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/connexion -d "username=admin@example.com&password=motdepasse123"
 ```
 
-Sous macOS ou Linux, vous pouvez remplacer `Invoke-RestMethod URL` par `curl URL`.
+Résultat attendu : un JSON qui commence par `{"access_token":"eyJ...`. Le jeton se passe ensuite dans l'en-tête `Authorization: Bearer <jeton>` pour créer, modifier ou supprimer un jeu. Ce compte ne sert qu'en développement : `python scripts/peupler.py --mot-de-passe <autre>` en choisit un autre.
 
 ## Tests
 
-Installez les dépendances de développement, puis lancez les tests et le linter depuis la racine du dépôt :
-
 ```bash
-python -m pip install -r requirements-dev.txt
-python -m pytest
+pytest
 ruff check .
 ```
 
-Les tests doivent se terminer sans échec et Ruff doit afficher `All checks passed!`.
+Résultat attendu : tous les tests passent, et ruff affiche `All checks passed!`. Les tests utilisent une base SQLite en mémoire et ne touchent pas à votre `.env`. La CI (`.github/workflows/verifications.yml`) lance les deux commandes sur chaque pull request.
 
 ## Architecture
 
+Une requête traverse les couches dans un seul sens : chaque couche n'appelle que celle du dessous.
+
 ```mermaid
 flowchart LR
-    Client[Client HTTP] --> Routeurs[Routeurs FastAPI]
-    Routeurs --> Services[Services métier]
-    Services --> Depots[Dépôts de données]
-    Depots --> Tables[Tables SQLAlchemy]
-    Tables --> Base[(PostgreSQL)]
+    Client -->|HTTP| Routeurs[app/routeurs]
+    Routeurs --> Services[app/services]
+    Services --> Depots[app/depots]
+    Depots --> Tables[app/tables]
+    Tables --> Base[(SQLite ou PostgreSQL)]
+    Routeurs -.valide avec.-> Modeles[app/modeles]
+    Services -.lève.-> Exceptions[app/exceptions.py]
+    Exceptions -.traduites en HTTP par.-> Main[app/main.py]
 ```
 
-Les dossiers principaux :
-
-- `app/routeurs/` : reçoit les requêtes HTTP et appelle les services.
-- `app/services/` : porte les règles métier.
-- `app/depots/` : lit et écrit les données avec SQLAlchemy.
-- `app/tables/` : définit les tables de la base de données.
-- `app/modeles/` : définit les données validées et les réponses de l'API.
-- `tests/` : contient les tests automatisés.
+| Dossier ou fichier | Rôle |
+|---|---|
+| `app/main.py` | Assemble l'application : middlewares, gestionnaires d'erreurs, routeurs |
+| `app/routeurs/` | Les routes HTTP : reçoivent, délèguent au service, répondent |
+| `app/services/` | La logique métier ; n'importe pas FastAPI et lève des exceptions métier |
+| `app/depots/` | L'accès aux données : lit et écrit en base, ne décide de rien |
+| `app/tables/` | Les tables SQLAlchemy : ce qui est stocké |
+| `app/modeles/` | Les modèles Pydantic : ce qui entre dans l'API et en sort |
+| `app/config.py` | La configuration, validée au démarrage |
+| `scripts/` | Scripts en ligne de commande : peupler, importer, exporter la base |
+| `tests/` | Les tests pytest |
 
 ## Contribuer
 
-1. Ouvrir ou choisir une issue pour décrire le changement.
-2. Mettre `main` à jour et créer une branche dédiée à l'issue, par exemple `fix/12-statistiques`.
-3. Faire des commits courts avec un message qui décrit chaque intention.
-4. Pousser la branche et ouvrir une pull request vers `main`, en expliquant le contexte, les changements, l'impact et les vérifications.
-5. Demander une relecture, répondre aux commentaires et attendre l'approbation avant de fusionner la pull request.
-6. Supprimer la branche après la fusion.
+1. Ouvrez une issue qui décrit le bug ou la fonctionnalité.
+2. Partez d'un `main` à jour et créez une branche `type/numero-description`, par exemple `fix/1-statistiques-catalogue-vide`.
+3. Committez au format Conventional Commits (`fix(jeux): …`, `docs: …`), avec `Refs #numero`.
+4. Ouvrez une pull request (contexte, changements, impact, comment tester, `Closes #numero`). Un autre membre la relit et l'approuve, et la CI doit être verte.
+5. Fusionnez par **Squash and merge**, puis supprimez la branche. On ne pousse jamais directement sur `main`.
