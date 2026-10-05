@@ -14,8 +14,7 @@ from app.exceptions import (
 )
 from app.modeles.jeux import JeuCreation, JeuMiseAJour
 from app.services import jeux as service
-from app.tables import Jeu, Role, Utilisateur
-
+from app.tables import Role, Utilisateur
 
 @pytest.fixture
 def auteur(session) -> Utilisateur:
@@ -219,8 +218,6 @@ def test_statistiques(session, catalogue):
 
 
 def test_statistiques_catalogue_vide(session):
-    session.query(Jeu).delete()
-
     stats = service.statistiques(session)
 
     assert stats["nombre"] == 0
